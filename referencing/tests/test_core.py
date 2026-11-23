@@ -681,8 +681,43 @@ class TestResource:
         resolver = Registry().resolver()
         assert resource.pointer("/foo/bar/0", resolver=resolver).contents == 3
 
-    def test_root_pointer(self):
-        contents = {"foo": "baz"}
+    def test_pointer_to_mapping_and_sequence(self):
+        resource = Resource.opaque(HashTrieMap({"0": ("xyz",)}))
+        resolver = Registry().resolver()
+        assert resource.pointer("/0/0", resolver=resolver).contents == "xyz"
+
+    @pytest.mark.parametrize(
+        "contents, pointer",
+        [
+            ({"name": "xyz"}, "/name/0"),
+            ({"name": "xyz"}, "/name/letter"),
+            ({"name": "xyz"}, "/name/"),
+            ([{"name": "xyz"}], "/0/name/0"),
+            ("xyz", "/0"),
+            ("xyz", "/letter"),
+            ("", "/0"),
+            (None, "/0"),
+            (True, "/0"),
+            (False, "/0"),
+            (12, "/0"),
+            (1.5, "/0"),
+        ],
+    )
+    def test_pointer_cannot_descend_into_scalar(self, contents, pointer):
+        resource = Resource.opaque(contents)
+        resolver = Registry().resolver()
+        with pytest.raises(exceptions.PointerToNowhere) as exc:
+            resource.pointer(pointer, resolver=resolver)
+        assert exc.value == exceptions.PointerToNowhere(
+            ref=pointer,
+            resource=resource,
+        )
+
+    @pytest.mark.parametrize(
+        "contents",
+        [{"foo": "baz"}, "xyz", "", None, True, 12, 1.5],
+    )
+    def test_root_pointer(self, contents):
         resource = Resource.opaque(contents=contents)
         resolver = Registry().resolver()
         assert resource.pointer("", resolver=resolver).contents == contents
@@ -759,6 +794,16 @@ class TestResolver:
             resolver.lookup(ref)
         assert e.value == exceptions.PointerToNowhere(
             ref="/10",
+            resource=resource,
+        )
+
+    def test_lookup_cannot_descend_into_string(self):
+        resource = Resource.opaque({"name": "xyz"})
+        resolver = Registry().resolver_with_root(resource)
+        with pytest.raises(exceptions.PointerToNowhere) as exc:
+            resolver.lookup("#/name/0")
+        assert exc.value == exceptions.PointerToNowhere(
+            ref="/name/0",
             resource=resource,
         )
 

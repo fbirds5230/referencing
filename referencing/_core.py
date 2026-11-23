@@ -263,10 +263,15 @@ class Resource(Generic[D]):
         contents = self.contents
         segments: list[int | str] = []
         for segment in unquote(pointer[1:]).split("/"):
-            if isinstance(contents, Sequence):
+            if isinstance(contents, Sequence) and not isinstance(
+                contents,
+                str,
+            ):
                 segment = int(segment)
-            else:
+            elif isinstance(contents, Mapping):
                 segment = segment.replace("~1", "/").replace("~0", "~")
+            else:
+                raise exceptions.PointerToNowhere(ref=pointer, resource=self)
             try:
                 contents = contents[segment]  # type: ignore[reportUnknownArgumentType]
             except LookupError as lookup_error:
